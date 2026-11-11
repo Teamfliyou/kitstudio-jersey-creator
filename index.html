@@ -30,12 +30,13 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;pa
 .seg button{border:0;background:transparent;padding:6px 12px;border-radius:7px;cursor:pointer;color:var(--mut)}
 .seg button:hover{color:var(--text)}
 .seg button.on{background:var(--accent);color:var(--accent-ink);font-weight:700}
-.preview{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:10px 20px}
-.preview svg{max-width:100%;max-height:100%;width:auto;height:100%;filter:drop-shadow(0 22px 28px rgba(0,0,0,.5))}
+.preview{flex:1;min-height:0;position:relative;margin:10px 20px}
+.preview svg{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 22px 28px rgba(0,0,0,.5))}
 .actions{display:flex;gap:8px;justify-content:center;align-items:center;padding:0 14px 16px;flex-wrap:wrap}
 .panel{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .tabs{display:flex;border-bottom:1px solid var(--line)}
-.tabs button{flex:1;padding:12px 4px;border:0;background:transparent;color:var(--mut);cursor:pointer;border-bottom:2px solid transparent;font-weight:600}
+.tabs{overflow-x:auto;flex:none;scrollbar-width:thin}
+.tabs button{flex:1 0 auto;padding:12px 10px;font-size:13px;white-space:nowrap;border:0;background:transparent;color:var(--mut);cursor:pointer;border-bottom:2px solid transparent;font-weight:600}
 .tabs button.on{color:var(--text);border-bottom-color:var(--accent)}
 .tabs button:hover{color:var(--text)}
 .pane{overflow:auto;padding:16px 18px 30px;flex:1}
@@ -46,6 +47,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;pa
 .row>label{flex:0 0 118px;color:var(--mut)}
 .row>.grow{flex:1;min-width:0}
 .row .seg{width:100%}
+.row>label.chk{flex:1}
 .row .seg button{flex:1;padding:6px 6px}
 input[type=range]{width:100%;accent-color:var(--accent)}
 .val{flex:0 0 34px;text-align:right;color:var(--mut);font-variant-numeric:tabular-nums}
@@ -56,6 +58,8 @@ input[type=text]:focus,select:focus{border-color:var(--accent)}
 .sw b{width:24px;height:24px;border-radius:6px;border:1px solid rgba(255,255,255,.25);flex:0 0 auto}
 .sw span{color:var(--mut);font-family:Consolas,monospace;font-size:12px}
 .grid{display:grid;gap:8px}
+.lt svg{width:100%;height:34px;display:block;margin:6px 0 4px;background:#fff;border-radius:6px;padding:3px 2px}
+.lt .lg{height:34px;margin:6px 0 4px;display:grid;place-items:center;font-size:18px;font-weight:700;color:var(--text)}
 .grid.pat{grid-template-columns:repeat(4,1fr)}
 .grid.pre{grid-template-columns:repeat(4,1fr)}
 .tile{background:var(--panel2);border:2px solid transparent;border-radius:10px;padding:4px 2px 6px;cursor:pointer;text-align:center;color:var(--mut);font-size:11px}
@@ -89,7 +93,7 @@ input[type=text]:focus,select:focus{border-color:var(--accent)}
 </head>
 <body>
 <header>
-  <div class="brand"><i>⚽</i> KitStudio <small>Créateur de maillots</small></div>
+  <div class="brand"><i>⚽</i> KitStudio <small>Créateur de maillots · v2</small></div>
   <div style="display:flex;gap:8px">
     <button class="btn" id="btnRandom">🎲 Aléatoire</button>
     <button class="btn" id="btnReset">Réinitialiser</button>
@@ -139,6 +143,7 @@ const PATTERNS = [
 const PALETTE = ['#ffffff','#111111','#d7263d','#0b3d91','#1e88e5','#87ceeb','#f4d35e','#c9a227',
                  '#0a8f4d','#0f5132','#ff7a00','#7b2cbf','#8d0f2c','#f78fb3','#9aa0a6','#3a1c71'];
 
+const slot = o => Object.assign({logo:'none', text:'SPONSOR', size:1, color:'#111111', mono:false, plate:true, plateColor:'#ffffff', image:null}, o||{});
 const DEFAULT = {
   neck:'round', sleeve:'short', pattern:'stripes-v', density:7,
   colors:{c1:'#ffffff', c2:'#d7263d', c3:'#111111'},
@@ -147,7 +152,7 @@ const DEFAULT = {
   sleeveSolid:false, sleeveColor:'#d7263d',
   text:{name:'DUPONT', number:'9', font:0, fill:'#111111', stroke:'#ffffff', sw:2, frontNumber:true},
   crest:{show:true, type:'shield', pos:'left', size:1, c1:'#d7263d', c2:'#ffffff', letters:'FC', image:null},
-  sponsor:{text:'KITSTUDIO', size:26, color:'#111111'},
+  sp:{ chest:slot({logo:'volta'}), back:slot(), sleeveL:slot(), sleeveR:slot(), maker:slot(), shorts:slot() },
   kit:{shorts:'#111111', shortsTrim:'#d7263d', socks:'#d7263d', socksTrim:'#ffffff'},
   view:'both'
 };
@@ -175,7 +180,7 @@ const PRESETS = PRESET_DEFS.map(([name,pattern,density,c1,c2,c3,collar,neck,fill
     pattern, density, neck, colors:{c1,c2,c3}, collar, trim:collar,
     text:{fill, stroke: dark?'#111111':'#ffffff'},
     crest:{c1:c3===c1?c2:c3, c2:c1},
-    sponsor:{color:fill},
+    sp:{chest:{color:fill}},
     kit:{shorts: dark?c1:c3, shortsTrim:c2, socks:c2, socksTrim:c1}
   })};
 });
@@ -191,9 +196,10 @@ try{
   if(h) S = merge(clone(DEFAULT), JSON.parse(decodeURIComponent(escape(atob(h[1])))));
 }catch(e){}
 
-const get = p => p.split('.').reduce((o,k)=>o[k], S);
+const rp = p => typeof p==='function' ? p() : p;
+const get = p => rp(p).split('.').reduce((o,k)=>o[k], S);
 function set(p, v){
-  const ks = p.split('.'); let o = S;
+  const ks = rp(p).split('.'); let o = S;
   for(let i=0;i<ks.length-1;i++) o = o[ks[i]];
   o[ks[ks.length-1]] = v;
   changed();
@@ -238,6 +244,47 @@ function patternSVG(s){
       body=`<rect width="400" height="440" fill="url(#GRAD)"/>`; break;
   }
   return {defs, body};
+}
+
+
+/* ===== Sponsors (marques fictives) ===== */
+const BRANDS = [
+  {id:'volta',name:'VOLTA',a:'#ff7a00',b:'#111111',icon:'<path d="M4 -14 L-10 3 L-2 3 L-5 14 L10 -5 L2 -5 Z" fill="currentColor"/>'},
+  {id:'novabank',name:'NOVABANK',a:'#0b3d91',b:'#0b3d91',icon:'<circle r="10" fill="none" stroke="currentColor" stroke-width="5"/><circle r="3" fill="currentColor"/>'},
+  {id:'aeroline',name:'AEROLINE',a:'#1e88e5',b:'#111111',icon:'<path d="M-14 8 Q0 -14 14 -10 Q2 -2 -2 8 Z" fill="currentColor"/>'},
+  {id:'fresh',name:'fresh',lc:1,a:'#0a8f4d',b:'#0a8f4d',icon:'<path d="M-12 10 Q-12 -12 12 -12 Q12 10 -12 10 Z" fill="currentColor"/>'},
+  {id:'titan',name:'TITAN',a:'#111111',b:'#111111',icon:'<polygon points="14,0 7,12 -7,12 -14,0 -7,-12 7,-12" fill="currentColor"/>'},
+  {id:'zenith',name:'ZENITH',a:'#d7263d',b:'#111111',icon:'<path d="M0 -14 L14 12 L-14 12 Z" fill="currentColor"/>'},
+  {id:'pulse',name:'PULSE',a:'#d7263d',b:'#d7263d',icon:'<path d="M-14 0 L-6 0 L-3 -10 L2 10 L5 0 L14 0" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>'},
+  {id:'orbit',name:'ORBIT',a:'#7b2cbf',b:'#3a1c71',icon:'<circle r="9" fill="none" stroke="currentColor" stroke-width="3.5"/><circle cx="9" cy="-9" r="4" fill="currentColor"/>'},
+  {id:'kick',name:'KICK',a:'#ff7a00',b:'#111111',icon:'<path d="M-14 12 L-6 -12 L-2 -12 L-10 12Z M-5 12 L3 -12 L7 -12 L-1 12Z M4 12 L12 -12 L16 -12 L8 12Z" fill="currentColor"/>'},
+  {id:'motorx',name:'MOTORX',a:'#d7263d',b:'#111111',icon:'<path d="M-12 -12 L0 0 L-12 12 M0 -12 L12 0 L0 12" fill="none" stroke="currentColor" stroke-width="5"/>'}
+];
+function brandSVG(b, sl){
+  const A = sl.mono ? sl.color : b.a, B = sl.mono ? sl.color : b.b;
+  const tw = b.name.length*(b.lc?9.5:11.5), w = 36+tw;
+  return {w, svg:`<g transform="translate(${-w/2} 0)"><g transform="translate(16 0)" color="${A}">${b.icon}</g>
+    <text x="36" y="6.5" font-family="'Arial Black', Arial, sans-serif" font-weight="900" font-size="${b.lc?19:17}" fill="${B}" textLength="${tw}" lengthAdjust="spacingAndGlyphs">${b.name}</text></g>`};
+}
+function sponsorSVG(sl, x, y, maxW){
+  if(!sl || sl.logo==='none') return '';
+  if(sl.logo==='text'){
+    if(!sl.text) return '';
+    const fs=26*sl.size;
+    return `<g transform="translate(${x} ${y})">${textSVG(sl.text.toUpperCase(),0,fs*.35,fs,"'Arial Black', Arial, sans-serif",sl.color,'none',0,maxW)}</g>`;
+  }
+  let inner, w;
+  if(sl.logo==='custom'){
+    if(!sl.image) return '';
+    w=120; inner=`<image href="${sl.image}" x="-60" y="-20" width="120" height="40" preserveAspectRatio="xMidYMid meet"/>`;
+  }else{
+    const b=BRANDS.find(b=>b.id===sl.logo); if(!b) return '';
+    ({w,svg:inner}=brandSVG(b,sl));
+  }
+  const pad = sl.plate ? 12 : 0;
+  const k = Math.min(sl.size, maxW/(w+pad));
+  const plate = sl.plate ? `<rect x="${-w/2-6}" y="-15" width="${w+12}" height="30" rx="7" fill="${sl.plateColor}" stroke="#000" stroke-opacity=".18"/>` : '';
+  return `<g transform="translate(${x} ${y}) scale(${k.toFixed(3)})">${plate}${inner}</g>`;
 }
 
 function crestSVG(c){
@@ -325,12 +372,15 @@ function jerseySVG(s, side, bare){
     const t = s.text, fam = FONTS[t.font][1];
     if(front){
       o += crestSVG(s.crest);
-      if(s.sponsor.text) o += textSVG(s.sponsor.text.toUpperCase(),200,205,s.sponsor.size,"'Arial Black', Arial, sans-serif",s.sponsor.color,'none',0,176);
+      o += sponsorSVG(s.sp.chest,200,195,170) + sponsorSVG(s.sp.maker,248,114,44);
       if(t.frontNumber && t.number) o += textSVG(t.number,200,362,48,fam,t.fill,t.stroke,t.sw*.6,80);
     }else{
       o += textSVG((t.name||'').toUpperCase(),200,112,Math.min(36,176/Math.max(1,(t.name||'').length*.6)),fam,t.fill,t.stroke,t.sw*.7,176);
       o += textSVG(t.number||'',200,290,160,fam,t.fill,t.stroke,t.sw*1.5,180);
+      o += sponsorSVG(s.sp.back,200,345,150);
     }
+    const sx = long?66:60, sy = long?235:130;
+    o += sponsorSVG(s.sp.sleeveL,sx,sy,40) + sponsorSVG(s.sp.sleeveR,400-sx,sy,40);
   }
   return o;
 }
@@ -344,7 +394,7 @@ function shortsSVG(s){
     <path d="M92 528 L186 540 M308 528 L214 540" stroke="${k.shortsTrim}" stroke-width="10" fill="none"/>
     <rect x="80" y="360" width="240" height="200" fill="#000" opacity=".07"/>
     <path d="M200 395 L200 470" stroke="#000" stroke-opacity=".3" stroke-width="2"/></g>
-  <path d="M108 372 L292 372 L308 528 L214 540 L200 470 L186 540 L92 528 Z" fill="none" stroke="#000" stroke-opacity=".38" stroke-width="1.6" stroke-linejoin="round"/>`;
+  <path d="M108 372 L292 372 L308 528 L214 540 L200 470 L186 540 L92 528 Z" fill="none" stroke="#000" stroke-opacity=".38" stroke-width="1.6" stroke-linejoin="round"/>`+sponsorSVG(s.sp.shorts,146,452,56);
 }
 function sockSVG(s){
   const k=s.kit; const id='k'+(++uid);
@@ -480,12 +530,52 @@ addTab('text','Textes',[
     select('text.font','Police',FONTS.map((f,i)=>[i,f[0]])),
     colorField('text.fill','Couleur'),colorField('text.stroke','Contour'),
     range('text.sw','Contour',0,6,1,v=>v+'px'),
-    toggle('text.frontNumber','Numéro sur la face avant')),
-  sec('Sponsor',
-    textField('sponsor.text','Texte','Sponsor',v=>v,12),
-    range('sponsor.size','Taille',14,44,1),
-    colorField('sponsor.color','Couleur'),
-    el('p',{class:'hint'},'Laissez vide pour retirer le sponsor.')),
+    toggle('text.frontNumber','Numéro sur la face avant'))
+]);
+
+
+// SPONSORS
+let spSlot='chest';
+const SLOTS=[['chest','Poitrine'],['back','Dos'],['sleeveL','Manche G'],['sleeveR','Manche D'],['maker','Équipementier'],['shorts','Short']];
+const SLOTHINT={chest:'Centre de la poitrine, face avant.',back:'Sous le numéro, au dos.',sleeveL:'Manche gauche (face et dos).',sleeveR:'Manche droite (face et dos).',maker:'Petit logo sur la poitrine droite.',shorts:'Jambe du short — visible en vue « Tenue ».'};
+const slotSeg=el('div',{class:'seg'});
+SLOTS.forEach(([v,l])=>{ const b=el('button',{type:'button',onclick:()=>{spSlot=v;syncs.forEach(f=>f());}},l); b.dataset.v=v; slotSeg.append(b); });
+syncs.push(()=>[...slotSeg.children].forEach(b=>b.classList.toggle('on',b.dataset.v===spSlot)));
+const sp = k => () => 'sp.'+spSlot+'.'+k;
+const logoGrid=el('div',{class:'grid pat'});
+const logoTiles=[['none','Aucun'],['text','Texte'],['custom','Mon logo'],...BRANDS.map(b=>[b.id,b.name])].map(([v,l])=>{
+  const t=el('button',{type:'button',class:'tile',onclick:()=>{ if(v==='custom' && !S.sp[spSlot].image){ pickLogo(); } set(sp('logo'),v); }});
+  const h=el('div',{class:'lt'});
+  if(v==='none') h.innerHTML='<div class="lg">—</div>';
+  else if(v==='text') h.innerHTML='<div class="lg">Aa</div>';
+  else if(v==='custom') h.innerHTML='<div class="lg">📁</div>';
+  else { const b=BRANDS.find(b=>b.id===v); const r=brandSVG(b,{mono:false}); h.innerHTML=`<svg viewBox="${-r.w/2-3} -16 ${r.w+6} 32">${r.svg}</svg>`; }
+  t.append(h,el('div',{},l)); logoGrid.append(t); return {t,v};
+});
+syncs.push(()=>logoTiles.forEach(({t,v})=>t.classList.toggle('on',S.sp[spSlot].logo===v)));
+const spFile=el('input',{type:'file',accept:'image/*',hidden:'hidden'});
+function pickLogo(){ spFile.click(); }
+spFile.addEventListener('change',()=>{
+  const f=spFile.files[0]; if(!f) return;
+  if(f.size>1.5*1024*1024){ toast('Image trop lourde (max 1,5 Mo)'); return; }
+  const r=new FileReader(); r.onload=()=>{ S.sp[spSlot].image=r.result; S.sp[spSlot].logo='custom'; changed(); }; r.readAsDataURL(f);
+  spFile.value='';
+});
+const cond=(node,fn)=>{ syncs.push(()=>{ node.style.display=fn(S.sp[spSlot])?'':'none'; }); return node; };
+const hint=el('p',{class:'hint'});
+syncs.push(()=>{ hint.textContent=SLOTHINT[spSlot]; });
+addTab('sponsors','Sponsors',[
+  sec('Emplacement',slotSeg,hint),
+  sec('Logo',logoGrid,
+    cond(el('div',{class:'row'},el('button',{type:'button',class:'btn',onclick:pickLogo},'📁 Importer mon logo'),spFile),sl=>sl.logo==='custom')),
+  sec('Réglages',
+    range(sp('size'),'Taille',0.4,2,0.05,v=>(+v).toFixed(2)+'×'),
+    cond(textField(sp('text'),'Texte','Sponsor',v=>v,14),sl=>sl.logo==='text'),
+    cond(colorField(sp('color'),'Couleur'),sl=>sl.logo==='text'||sl.mono),
+    cond(toggle(sp('mono'),'Logo monochrome'),sl=>BRANDS.some(b=>b.id===sl.logo)),
+    cond(toggle(sp('plate'),'Pastille de fond'),sl=>sl.logo!=='text'&&sl.logo!=='none'),
+    cond(colorField(sp('plateColor'),'Couleur pastille'),sl=>sl.plate&&sl.logo!=='text'&&sl.logo!=='none'),
+    el('div',{class:'row'},el('button',{type:'button',class:'btn sm',onclick:()=>{ S.sp[spSlot]=slot(); changed(); }},'Vider cet emplacement'))),
 ]);
 
 // ÉCUSSON
@@ -534,7 +624,7 @@ function drawGallery(){
     gal.append(t);
   });
 }
-addTab('gallery','Mes créations',[
+addTab('gallery','Galerie',[
   sec('Enregistrer',
     el('div',{class:'row'},nameIn,el('button',{type:'button',class:'btn primary',onclick:()=>{
       const a=loadGallery(); a.unshift({id:Date.now(),name:nameIn.value.trim()||('Maillot '+(a.length+1)),s:clone(S)});
@@ -611,7 +701,7 @@ $('#btnRandom').onclick=()=>{
   S.sleeveSolid=false; S.shoulderOn=Math.random()<.3;
   S.crest.c1=c3; S.crest.c2=c1;
   const light=['#ffffff','#f4d35e','#87ceeb','#f78fb3','#9aa0a6','#ff7a00'].includes(c1);
-  S.text.fill=light?'#111111':'#ffffff'; S.text.stroke=light?'#ffffff':'#111111'; S.sponsor.color=S.text.fill;
+  S.text.fill=light?'#111111':'#ffffff'; S.text.stroke=light?'#ffffff':'#111111'; S.sp.chest.color=S.text.fill;
   S.kit={shorts:c3,shortsTrim:c2,socks:c2,socksTrim:c1};
   changed();
 };
